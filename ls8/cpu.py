@@ -10,6 +10,12 @@ class CPU:
         self.reg = [0] * 8
         self.pc = 0
         self.ram = [0] * 256
+        self.sp = 7
+        self.fl = {
+            'E':0,
+            'L':0,
+            'G':0
+        }
 
     def load(self):
         """Load a program into memory."""
@@ -32,7 +38,6 @@ class CPU:
                     new_line = line.rstrip()
                     line = int(new_line, base=2)
                     program.append(line)
-            print(program)
             for instruction in program:
                 self.ram_write(instruction, address)
                 address += 1
@@ -44,6 +49,20 @@ class CPU:
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
         #elif op == "SUB": etc
+        elif op =="CMP":
+            if reg_a < reg_b:
+                self.fl['E'] = 0
+                self.fl['G'] = 0
+                self.fl['L'] = 1
+            elif reg_a == reg_b:
+                self.fl['E'] = 1
+                self.fl['G'] = 0
+                self.fl['L'] = 0 
+            else:
+                self.fl['E'] = 0
+                self.fl['G'] = 1
+                self.fl['L'] = 0   
+
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -86,17 +105,78 @@ class CPU:
                 print(value)
                 self.pc += 2
             
-            elif IR == 0b00000001:
+            elif IR == 0b00000001: #HALT
                 break
 
-            elif IR == 0b10100010:
+            elif IR == 0b10100010: #MULT
                 reg_num_1 = self.ram_read(self.pc + 1)
                 reg_num_2 = self.ram_read(self.pc + 2)
                 value_1 = self.reg[reg_num_1]
                 value_2 = self.reg[reg_num_2]
                 self.reg[reg_num_1] = value_1 * value_2
                 self.pc += 3
-            
+            elif IR == 0b01000101: #PUSH
+                self.reg[self.sp] -= 1
+                reg_num = self.ram_read(self.pc + 1)
+                value = self.reg[reg_num] 
+                address = self.reg[self.sp]
+                self.ram_write(value, address)
+
+                self.pc+= 2
+            elif IR == 0b01000110: #POP
+                self.reg[self.sp] += 1
+                reg_num = self.ram_read(self.pc + 1)
+                value = self.reg[reg_num] 
+                address = self.reg[self.sp]
+                self.ram_write(value, address)
+
+                self.pc+= 2
+            elif IR == 0b01010000: #CALL
+                return_addr = self.pc+2
+                self.reg[self.sp] -=1
+                self.ram_write(return_addr,self.reg[self.sp])
+
+                reg_num = self.ram_read(self.pc+1)
+                dest_addr = self.reg[reg_num]
+
+                self.pc = dest_addr
+            elif IR == 0b00010001: #RET
+                return_addr = self.ram_read(self.reg[self.sp])
+                self.reg[self.sp] +=1
+
+                self.pc = return_addr
+            elif IR == 0b10100000: #ADD
+                reg_num_1 = self.ram_read(self.pc + 1)
+                reg_num_2 = self.ram_read(self.pc + 2)
+                value_1 = self.reg[reg_num_1]
+                value_2 = self.reg[reg_num_2]
+                self.reg[reg_num_1] = value_1 + value_2
+                self.pc += 3
+            elif IR == 0b10100111: #CMP
+                reg_num_1 = self.ram_read(self.pc + 1)
+                reg_num_2 = self.ram_read(self.pc + 2)
+                value_1 = self.reg[reg_num_1]
+                value_2 = self.reg[reg_num_2]
+                self.alu('CMP',value_1,value_2)
+                self.pc += 3
+            elif IR == 0b01010100: #JMP
+                reg_num = self.ram_read(self.pc + 1)
+                value = self.reg[reg_num]
+                self.pc = value
+            elif IR == 0b01010101: #JEQ
+                if self.fl['E'] == 1:
+                    reg_num = self.ram_read(self.pc + 1)
+                    value = self.reg[reg_num]
+                    self.pc = value
+                else:
+                    self.pc += 2
+            elif IR == 0b01010110: #JNE
+                if self.fl['E'] == 0:
+                    reg_num = self.ram_read(self.pc + 1)
+                    value = self.reg[reg_num]
+                    self.pc = value
+                else:
+                    self.pc+=2
             else:
                 print('unknown instruction')
                 break
